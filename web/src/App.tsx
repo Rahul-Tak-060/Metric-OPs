@@ -21,6 +21,10 @@ const DIMENSIONS = [
 
 type DimensionKey = (typeof DIMENSIONS)[number]["key"];
 
+function fmtUpdatedAt(d: Date | null) {
+  return d ? d.toLocaleString() : "Not run yet";
+}
+
 export default function App() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [metricKey, setMetricKey] = useState("orders_sold");
@@ -35,8 +39,12 @@ export default function App() {
   const [dq, setDq] = useState<DqLatest | null>(null);
   const [dqFailures, setDqFailures] = useState<DqFailuresResponse | null>(null);
 
-  const [loading, setLoading] = useState<string | null>(null);
+  const [loading, setLoading] = useState({ kpi: false, why: false, dq: false });
   const [error, setError] = useState<string | null>(null);
+
+  const [kpiUpdatedAt, setKpiUpdatedAt] = useState<Date | null>(null);
+  const [whyUpdatedAt, setWhyUpdatedAt] = useState<Date | null>(null);
+  const [dqUpdatedAt, setDqUpdatedAt] = useState<Date | null>(null);
 
   const [showDebug, setShowDebug] = useState(false);
 
@@ -64,41 +72,44 @@ export default function App() {
 
   async function runKpi() {
     setError(null);
-    setLoading("kpi");
+    setLoading((s) => ({ ...s, kpi: true }));
     try {
       const res = await api.kpiSummary(d1 || undefined, d2 || undefined);
       setKpi(res);
+      setKpiUpdatedAt(new Date());
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
-      setLoading(null);
+      setLoading((s) => ({ ...s, kpi: false }));
     }
   }
 
   async function runWhy() {
     setError(null);
-    setLoading("why");
+    setLoading((s) => ({ ...s, why: true }));
     try {
       const res = await api.whyChanged(metricKey, dimension, topN, d1 || undefined, d2 || undefined);
       setWhy(res);
+      setWhyUpdatedAt(new Date());
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
-      setLoading(null);
+      setLoading((s) => ({ ...s, why: false }));
     }
   }
 
   async function runDq() {
     setError(null);
-    setLoading("dq");
+    setLoading((s) => ({ ...s, dq: true }));
     try {
       const [a, b] = await Promise.all([api.dqLatest(), api.dqFailures()]);
       setDq(a);
       setDqFailures(b);
+      setDqUpdatedAt(new Date());
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
-      setLoading(null);
+      setLoading((s) => ({ ...s, dq: false }));
     }
   }
 
@@ -116,23 +127,32 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button
               onClick={runKpi}
-              className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+              disabled={loading.kpi}
+              className={`px-3 py-2 rounded-lg text-sm ${
+                loading.kpi ? "bg-zinc-800 opacity-60 cursor-not-allowed" : "bg-zinc-800 hover:bg-zinc-700"
+              }`}
             >
-              {loading === "kpi" ? "Loading…" : "Run KPI Summary"}
+              {loading.kpi ? "Loading…" : "Run KPI Summary"}
             </button>
 
             <button
               onClick={runWhy}
-              className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm"
+              disabled={loading.why}
+              className={`px-3 py-2 rounded-lg text-sm ${
+                loading.why ? "bg-indigo-600 opacity-60 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-500"
+              }`}
             >
-              {loading === "why" ? "Loading…" : "Run Why Changed"}
+              {loading.why ? "Loading…" : "Run Why Changed"}
             </button>
 
             <button
               onClick={runDq}
-              className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+              disabled={loading.dq}
+              className={`px-3 py-2 rounded-lg text-sm ${
+                loading.dq ? "bg-zinc-800 opacity-60 cursor-not-allowed" : "bg-zinc-800 hover:bg-zinc-700"
+              }`}
             >
-              {loading === "dq" ? "Loading…" : "Load Data Quality"}
+              {loading.dq ? "Loading…" : "Load Data Quality"}
             </button>
 
             <label className="ml-2 flex items-center gap-2 text-xs text-zinc-400 select-none">
@@ -207,6 +227,10 @@ export default function App() {
               </div>
             </div>
 
+            <div className="mt-2 text-xs text-zinc-500">
+              Tip: leave d1/d2 blank to auto-pick latest two dates.
+            </div>
+
             <div className="mt-4">
               <div className="text-xs text-zinc-400">Top N drivers</div>
               <input
@@ -237,17 +261,20 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">KPI Summary</h2>
+              <div>
+                <h2 className="text-sm font-semibold">KPI Summary</h2>
+                <div className="text-xs text-zinc-500">Updated: {fmtUpdatedAt(kpiUpdatedAt)}</div>
+              </div>
               <span className="text-xs text-zinc-400">/kpi-summary</span>
             </div>
 
             <div className="mt-3">
-              {!kpi ? (
+              {loading.kpi ? (
+                <div className="text-xs text-zinc-400">Loading KPI Summary…</div>
+              ) : !kpi ? (
                 <div className="text-xs text-zinc-400">Run KPI Summary to populate.</div>
               ) : (
                 <KpiSummaryCards kpi={kpi} />
-                // If your component expects `kpi` instead of `data`, use:
-                // <KpiSummaryCards kpi={kpi} />
               )}
             </div>
 
@@ -260,12 +287,19 @@ export default function App() {
 
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Why Changed</h2>
+              <div>
+                <h2 className="text-sm font-semibold">Why Changed</h2>
+                <div className="text-xs text-zinc-500">Updated: {fmtUpdatedAt(whyUpdatedAt)}</div>
+              </div>
               <span className="text-xs text-zinc-400">/why-changed</span>
             </div>
 
             <div className="mt-3">
-              <DriversTable data={why} topN={topN} />
+              {loading.why ? (
+                <div className="text-xs text-zinc-400">Loading Why Changed…</div>
+              ) : (
+                <DriversTable data={why} topN={topN} />
+              )}
             </div>
 
             {showDebug && (
@@ -280,12 +314,17 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Data Quality Latest</h2>
+              <div>
+                <h2 className="text-sm font-semibold">Data Quality Latest</h2>
+                <div className="text-xs text-zinc-500">Updated: {fmtUpdatedAt(dqUpdatedAt)}</div>
+              </div>
               <span className="text-xs text-zinc-400">/dq/latest</span>
             </div>
 
             <div className="mt-3">
-              {!dq ? (
+              {loading.dq ? (
+                <div className="text-xs text-zinc-400">Loading Data Quality…</div>
+              ) : !dq ? (
                 <div className="text-xs text-zinc-400">Load Data Quality to populate.</div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -320,12 +359,17 @@ export default function App() {
 
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">DQ Failures</h2>
+              <div>
+                <h2 className="text-sm font-semibold">DQ Failures</h2>
+                <div className="text-xs text-zinc-500">Updated: {fmtUpdatedAt(dqUpdatedAt)}</div>
+              </div>
               <span className="text-xs text-zinc-400">/dq/latest/failures</span>
             </div>
 
             <div className="mt-3">
-              {!dqFailures ? (
+              {loading.dq ? (
+                <div className="text-xs text-zinc-400">Loading Data Quality…</div>
+              ) : !dqFailures ? (
                 <div className="text-xs text-zinc-400">Load Data Quality to populate.</div>
               ) : dqFailures.failures.length === 0 ? (
                 <div className="text-xs text-zinc-400">No failures 🎉</div>
