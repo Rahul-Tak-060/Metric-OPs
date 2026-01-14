@@ -1,11 +1,19 @@
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+
+async function getJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json() as Promise<T>;
+}
 
 export type Metric = {
   metric_key: string;
   metric_name: string;
-  metric_type: string;
-  description?: string | null;
+  metric_type: "ADDITIVE" | "RATE";
+  description: string;
 };
+
+export type MetricsResponse = { metrics: Metric[] };
 
 export type KpiSummary = {
   d1: string;
@@ -21,56 +29,77 @@ export type KpiSummary = {
   orders_sold_delta: number;
 };
 
-export async function getHealth() {
-  const r = await fetch(`${API_BASE}/health`);
-  if (!r.ok) throw new Error(`health failed: ${r.status}`);
-  return r.json();
-}
-
-export async function getMetrics(): Promise<{ metrics: Metric[] }> {
-  const r = await fetch(`${API_BASE}/metrics`);
-  if (!r.ok) throw new Error(`metrics failed: ${r.status}`);
-  return r.json();
-}
-
-export async function getKpiSummary(params?: { d1?: string; d2?: string }): Promise<KpiSummary> {
-  const qs = new URLSearchParams();
-  if (params?.d1) qs.set("d1", params.d1);
-  if (params?.d2) qs.set("d2", params.d2);
-
-  const url = qs.toString() ? `${API_BASE}/kpi-summary?${qs}` : `${API_BASE}/kpi-summary`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`kpi-summary failed: ${r.status}`);
-  return r.json();
-}
-
-export async function getWhyChanged(params: {
-  metric_key: string;
+export type WhyChangedAdditiveDriver = {
   dimension: string;
-  d1?: string;
-  d2?: string;
-  top_n?: number;
-}) {
-  const qs = new URLSearchParams();
-  qs.set("metric_key", params.metric_key);
-  qs.set("dimension", params.dimension);
-  if (params.d1) qs.set("d1", params.d1);
-  if (params.d2) qs.set("d2", params.d2);
-  if (params.top_n) qs.set("top_n", String(params.top_n));
+  dim_value: string;
+  value_d1: number;
+  value_d2: number;
+  delta: number;
+  pct_change: number;
+};
 
-  const r = await fetch(`${API_BASE}/why-changed?${qs.toString()}`);
-  if (!r.ok) throw new Error(`why-changed failed: ${r.status}`);
-  return r.json();
-}
+export type WhyChangedRateDriver = {
+  dimension: string;
+  dim_value: string;
+  cancelled_d2: number;
+  total_d2: number;
+  rate_d2: number;
+  cancelled_d1: number;
+  total_d1: number;
+  rate_d1: number;
+  rate_delta: number;
+};
 
-export async function getDqLatest() {
-  const r = await fetch(`${API_BASE}/dq/latest`);
-  if (!r.ok) throw new Error(`dq/latest failed: ${r.status}`);
-  return r.json();
-}
+export type WhyChangedResponse =
+  | {
+      metric_key: string;
+      dimension: string;
+      summary: KpiSummary;
+      drivers: WhyChangedAdditiveDriver[];
+    }
+  | {
+      metric_key: string;
+      dimension: string;
+      summary: KpiSummary;
+      drivers: WhyChangedRateDriver[];
+    };
 
-export async function getDqLatestFailures() {
-  const r = await fetch(`${API_BASE}/dq/latest/failures`);
-  if (!r.ok) throw new Error(`dq/latest/failures failed: ${r.status}`);
-  return r.json();
-}
+export type DqLatest = {
+  run_id: number;
+  run_ts: string;
+  source: string;
+  status: "PASSED" | "FAILED";
+  checks_total: number;
+  checks_passed: number;
+  checks_failed: number;
+};
+
+export type DqFailure = {
+  severity: string;
+  check_name: string;
+  passed: boolean;
+  metric_value: number | null;
+  threshold_value: number | null;
+  details: string;
+};
+
+export type DqFailuresResponse = { failures: DqFailure[] };
+
+export const api = {
+  metrics: () => getJson<MetricsResponse>("/metrics"),
+  kpiSummary: (d1?: string, d2?: string) => {
+    const qs = new URLSearchParams();
+    if (d1) qs.set("d1", d1);
+    if (d2) qs.set("d2", d2);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return getJson<KpiSummary>(`/kpi-summary${suffix}`);
+  },
+  whyChanged: (metric_key: string, dimension: string, top_n = 10, d1?: string, d2?: string) => {
+    const qs = new URLSearchParams({ metric_key, dimension, top_n: String(top_n) });
+    if (d1) qs.set("d1", d1);
+    if (d2) qs.set("d2", d2);
+    return getJson<WhyChangedResponse>(`/why-changed?${qs.toString()}`);
+  },
+  dqLatest: () => getJson<DqLatest>("/dq/latest"),
+  dqFailures: () => getJson<DqFailuresResponse>("/dq/latest/failures"),
+};
