@@ -10,7 +10,7 @@ import {
 
 import KpiSummaryCards from "./components/KpiSummaryCards";
 import { DriversTable } from "./components/DriversTable";
-import JsonPanel from "./components/JsonPanel"; // keep ONLY if you have a Debug JSON toggle
+import JsonPanel from "./components/JsonPanel";
 
 const DIMENSIONS = [
   { key: "ship_state", label: "Ship State" },
@@ -20,24 +20,6 @@ const DIMENSIONS = [
 ] as const;
 
 type DimensionKey = (typeof DIMENSIONS)[number]["key"];
-
-function formatNumber(n: number | null | undefined) {
-  if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
-}
-
-function deltaClass(n: number | null | undefined) {
-  if (n === null || n === undefined || Number.isNaN(n)) return "text-zinc-300";
-  if (n > 0) return "text-emerald-300";
-  if (n < 0) return "text-red-300";
-  return "text-zinc-300";
-}
-
-function DeltaValue({ value }: { value: number | null | undefined }) {
-  const cls = deltaClass(value);
-  const sign = value !== null && value !== undefined && value > 0 ? "+" : "";
-  return <span className={cls}>{value == null ? "—" : `${sign}${formatNumber(value)}`}</span>;
-}
 
 export default function App() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
@@ -69,8 +51,11 @@ export default function App() {
         const data = await api.metrics();
         setMetrics(data.metrics);
 
-        if (data.metrics.some((m) => m.metric_key === "orders_sold")) setMetricKey("orders_sold");
-        else if (data.metrics[0]) setMetricKey(data.metrics[0].metric_key);
+        if (data.metrics.some((m) => m.metric_key === "orders_sold")) {
+          setMetricKey("orders_sold");
+        } else if (data.metrics[0]) {
+          setMetricKey(data.metrics[0].metric_key);
+        }
       } catch (e: any) {
         setError(e?.message ?? String(e));
       }
@@ -135,12 +120,14 @@ export default function App() {
             >
               {loading === "kpi" ? "Loading…" : "Run KPI Summary"}
             </button>
+
             <button
               onClick={runWhy}
               className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm"
             >
               {loading === "why" ? "Loading…" : "Run Why Changed"}
             </button>
+
             <button
               onClick={runDq}
               className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
@@ -254,72 +241,15 @@ export default function App() {
               <span className="text-xs text-zinc-400">/kpi-summary</span>
             </div>
 
-            {!kpi ? (
-              <div className="mt-3 text-xs text-zinc-400">Run KPI Summary to populate.</div>
-            ) : (
-              <div className="mt-3 space-y-3">
-                <div className="text-xs text-zinc-400">
-                  Comparing <span className="text-zinc-200">{kpi.d1}</span> to{" "}
-                  <span className="text-zinc-200">{kpi.d2}</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <div className="text-xs text-zinc-400">Gross Sales</div>
-                    <div className="mt-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d1</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.gross_sales_d1)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d2</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.gross_sales_d2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">delta</span>
-                        <DeltaValue value={kpi.gross_sales_delta} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <div className="text-xs text-zinc-400">Orders Sold</div>
-                    <div className="mt-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d1</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.orders_sold_d1)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d2</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.orders_sold_d2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">delta</span>
-                        <DeltaValue value={kpi.orders_sold_delta} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <div className="text-xs text-zinc-400">AOV</div>
-                    <div className="mt-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d1</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.aov_d1)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">d2</span>
-                        <span className="text-zinc-200">{formatNumber(kpi.aov_d2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">delta</span>
-                        <DeltaValue value={kpi.aov_delta} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="mt-3">
+              {!kpi ? (
+                <div className="text-xs text-zinc-400">Run KPI Summary to populate.</div>
+              ) : (
+                <KpiSummaryCards kpi={kpi} />
+                // If your component expects `kpi` instead of `data`, use:
+                // <KpiSummaryCards kpi={kpi} />
+              )}
+            </div>
 
             {showDebug && (
               <div className="mt-4">
@@ -335,33 +265,7 @@ export default function App() {
             </div>
 
             <div className="mt-3">
-              {!why ? (
-                <div className="text-xs text-zinc-400">Run Why Changed to populate.</div>
-              ) : (
-                <div className="overflow-auto border border-zinc-800 rounded-lg">
-                  <table className="w-full text-sm">
-                    <thead className="text-zinc-300 bg-zinc-950">
-                      <tr>
-                        <th className="text-left p-3 border-b border-zinc-800">Dim value</th>
-                        <th className="text-right p-3 border-b border-zinc-800">d1</th>
-                        <th className="text-right p-3 border-b border-zinc-800">d2</th>
-                        <th className="text-right p-3 border-b border-zinc-800">Delta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {"drivers" in why &&
-                        why.drivers.map((r: any, idx: number) => (
-                          <tr key={idx} className="border-b border-zinc-800">
-                            <td className="p-3">{r.dim_value}</td>
-                            <td className="p-3 text-right">{r.value_d1 ?? r.rate_d1 ?? "—"}</td>
-                            <td className="p-3 text-right">{r.value_d2 ?? r.rate_d2 ?? "—"}</td>
-                            <td className="p-3 text-right">{r.delta ?? r.rate_delta ?? "—"}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <DriversTable data={why} topN={topN} />
             </div>
 
             {showDebug && (
