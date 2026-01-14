@@ -7,7 +7,6 @@ import {
   type DqLatest,
   type DqFailuresResponse,
 } from "./lib/api";
-import KpiSummaryCards from "./components/KpiSummaryCards";
 import JsonPanel from "./components/JsonPanel";
 
 const DIMENSIONS = [
@@ -19,8 +18,22 @@ const DIMENSIONS = [
 
 type DimensionKey = (typeof DIMENSIONS)[number]["key"];
 
-function isRateWhyChanged(x: WhyChangedResponse | null): x is Extract<WhyChangedResponse, { drivers: any[] }> {
-  return !!x;
+function formatNumber(n: number | null | undefined) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
+}
+
+function deltaClass(n: number | null | undefined) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "text-zinc-300";
+  if (n > 0) return "text-emerald-300";
+  if (n < 0) return "text-red-300";
+  return "text-zinc-300";
+}
+
+function DeltaValue({ value }: { value: number | null | undefined }) {
+  const cls = deltaClass(value);
+  const sign = value !== null && value !== undefined && value > 0 ? "+" : "";
+  return <span className={cls}>{value == null ? "—" : `${sign}${formatNumber(value)}`}</span>;
 }
 
 export default function App() {
@@ -238,13 +251,72 @@ export default function App() {
               <span className="text-xs text-zinc-400">/kpi-summary</span>
             </div>
 
-            <div className="mt-3">
-              {kpi ? (
-                <KpiSummaryCards data={kpi} />
-              ) : (
-                <div className="text-xs text-zinc-400">Run KPI Summary to populate.</div>
-              )}
-            </div>
+            {!kpi ? (
+              <div className="mt-3 text-xs text-zinc-400">Run KPI Summary to populate.</div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="text-xs text-zinc-400">
+                  Comparing <span className="text-zinc-200">{kpi.d1}</span> to{" "}
+                  <span className="text-zinc-200">{kpi.d2}</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Gross Sales</div>
+                    <div className="mt-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d1</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.gross_sales_d1)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d2</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.gross_sales_d2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">delta</span>
+                        <DeltaValue value={kpi.gross_sales_delta} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Orders Sold</div>
+                    <div className="mt-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d1</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.orders_sold_d1)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d2</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.orders_sold_d2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">delta</span>
+                        <DeltaValue value={kpi.orders_sold_delta} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">AOV</div>
+                    <div className="mt-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d1</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.aov_d1)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">d2</span>
+                        <span className="text-zinc-200">{formatNumber(kpi.aov_d2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">delta</span>
+                        <DeltaValue value={kpi.aov_delta} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showDebug && (
               <div className="mt-4">
@@ -367,7 +439,11 @@ export default function App() {
 
             {showDebug && (
               <div className="mt-4">
-                <JsonPanel title="DQ Failures JSON" data={dqFailures} emptyText="No failures payload yet." />
+                <JsonPanel
+                  title="DQ Failures JSON"
+                  data={dqFailures}
+                  emptyText="No failures payload yet."
+                />
               </div>
             )}
           </div>
