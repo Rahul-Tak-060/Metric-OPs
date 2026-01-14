@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Metric, type KpiSummary, type WhyChangedResponse, type DqLatest, type DqFailuresResponse } from "./lib/api";
+import {
+  api,
+  type Metric,
+  type KpiSummary,
+  type WhyChangedResponse,
+  type DqLatest,
+  type DqFailuresResponse,
+} from "./lib/api";
+import KpiSummaryCards from "./components/KpiSummaryCards";
+import JsonPanel from "./components/JsonPanel";
 
 const DIMENSIONS = [
   { key: "ship_state", label: "Ship State" },
@@ -9,6 +18,10 @@ const DIMENSIONS = [
 ] as const;
 
 type DimensionKey = (typeof DIMENSIONS)[number]["key"];
+
+function isRateWhyChanged(x: WhyChangedResponse | null): x is Extract<WhyChangedResponse, { drivers: any[] }> {
+  return !!x;
+}
 
 export default function App() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
@@ -26,6 +39,8 @@ export default function App() {
 
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [showDebug, setShowDebug] = useState(false);
 
   const selectedMetric = useMemo(
     () => metrics.find((m) => m.metric_key === metricKey),
@@ -96,7 +111,8 @@ export default function App() {
               Certified metrics, data quality checks, and “why changed” drivers.
             </p>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex items-center gap-2">
             <button
               onClick={runKpi}
               className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
@@ -115,6 +131,15 @@ export default function App() {
             >
               {loading === "dq" ? "Loading…" : "Load Data Quality"}
             </button>
+
+            <label className="ml-2 flex items-center gap-2 text-xs text-zinc-400 select-none">
+              <input
+                type="checkbox"
+                checked={showDebug}
+                onChange={(e) => setShowDebug(e.target.checked)}
+              />
+              Debug JSON
+            </label>
           </div>
         </div>
 
@@ -124,6 +149,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Controls */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="text-xs text-zinc-400">Metric</div>
@@ -138,6 +164,7 @@ export default function App() {
                 </option>
               ))}
             </select>
+
             <div className="text-xs text-zinc-400 mt-3">Description</div>
             <div className="text-sm mt-1 text-zinc-200">{selectedMetric?.description ?? "—"}</div>
           </div>
@@ -185,7 +212,7 @@ export default function App() {
                 onChange={(e) => setTopN(Number(e.target.value))}
                 className="mt-2 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
                 min={1}
-                max={50}
+                max={200}
               />
             </div>
           </div>
@@ -203,15 +230,27 @@ export default function App() {
           </div>
         </div>
 
+        {/* KPI + Why */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">KPI Summary</h2>
               <span className="text-xs text-zinc-400">/kpi-summary</span>
             </div>
-            <pre className="mt-3 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 overflow-auto">
-              {kpi ? JSON.stringify(kpi, null, 2) : "Run KPI Summary to populate."}
-            </pre>
+
+            <div className="mt-3">
+              {kpi ? (
+                <KpiSummaryCards data={kpi} />
+              ) : (
+                <div className="text-xs text-zinc-400">Run KPI Summary to populate.</div>
+              )}
+            </div>
+
+            {showDebug && (
+              <div className="mt-4">
+                <JsonPanel title="Raw KPI JSON" data={kpi} emptyText="No KPI payload yet." />
+              </div>
+            )}
           </div>
 
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
@@ -219,21 +258,85 @@ export default function App() {
               <h2 className="text-sm font-semibold">Why Changed</h2>
               <span className="text-xs text-zinc-400">/why-changed</span>
             </div>
-            <pre className="mt-3 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 overflow-auto">
-              {why ? JSON.stringify(why, null, 2) : "Run Why Changed to populate."}
-            </pre>
+
+            <div className="mt-3">
+              {!why ? (
+                <div className="text-xs text-zinc-400">Run Why Changed to populate.</div>
+              ) : (
+                <div className="overflow-auto border border-zinc-800 rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="text-zinc-300 bg-zinc-950">
+                      <tr>
+                        <th className="text-left p-3 border-b border-zinc-800">Dim value</th>
+                        <th className="text-right p-3 border-b border-zinc-800">d1</th>
+                        <th className="text-right p-3 border-b border-zinc-800">d2</th>
+                        <th className="text-right p-3 border-b border-zinc-800">Delta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {"drivers" in why &&
+                        why.drivers.map((r: any, idx: number) => (
+                          <tr key={idx} className="border-b border-zinc-800">
+                            <td className="p-3">{r.dim_value}</td>
+                            <td className="p-3 text-right">{r.value_d1 ?? r.rate_d1 ?? "—"}</td>
+                            <td className="p-3 text-right">{r.value_d2 ?? r.rate_d2 ?? "—"}</td>
+                            <td className="p-3 text-right">{r.delta ?? r.rate_delta ?? "—"}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {showDebug && (
+              <div className="mt-4">
+                <JsonPanel title="Why Changed JSON" data={why} emptyText="No why payload yet." />
+              </div>
+            )}
           </div>
         </div>
 
+        {/* DQ */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">Data Quality Latest</h2>
               <span className="text-xs text-zinc-400">/dq/latest</span>
             </div>
-            <pre className="mt-3 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 overflow-auto">
-              {dq ? JSON.stringify(dq, null, 2) : "Load Data Quality to populate."}
-            </pre>
+
+            <div className="mt-3">
+              {!dq ? (
+                <div className="text-xs text-zinc-400">Load Data Quality to populate.</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Status</div>
+                    <div className="mt-1 font-semibold">{dq.status}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Source</div>
+                    <div className="mt-1 font-semibold">{dq.source}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Checks passed</div>
+                    <div className="mt-1 font-semibold">
+                      {dq.checks_passed}/{dq.checks_total}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div className="text-xs text-zinc-400">Checks failed</div>
+                    <div className="mt-1 font-semibold">{dq.checks_failed}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {showDebug && (
+              <div className="mt-4">
+                <JsonPanel title="DQ Latest JSON" data={dq} emptyText="No DQ payload yet." />
+              </div>
+            )}
           </div>
 
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
@@ -241,9 +344,32 @@ export default function App() {
               <h2 className="text-sm font-semibold">DQ Failures</h2>
               <span className="text-xs text-zinc-400">/dq/latest/failures</span>
             </div>
-            <pre className="mt-3 text-xs bg-zinc-950 border border-zinc-800 rounded-lg p-3 overflow-auto">
-              {dqFailures ? JSON.stringify(dqFailures, null, 2) : "Load Data Quality to populate."}
-            </pre>
+
+            <div className="mt-3">
+              {!dqFailures ? (
+                <div className="text-xs text-zinc-400">Load Data Quality to populate.</div>
+              ) : dqFailures.failures.length === 0 ? (
+                <div className="text-xs text-zinc-400">No failures 🎉</div>
+              ) : (
+                <div className="space-y-2">
+                  {dqFailures.failures.map((f, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-zinc-950 border border-zinc-800">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold">{f.check_name}</div>
+                        <div className="text-xs text-zinc-400">{f.severity}</div>
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-1">{f.details}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {showDebug && (
+              <div className="mt-4">
+                <JsonPanel title="DQ Failures JSON" data={dqFailures} emptyText="No failures payload yet." />
+              </div>
+            )}
           </div>
         </div>
       </div>
