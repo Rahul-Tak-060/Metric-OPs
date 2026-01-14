@@ -13,21 +13,18 @@ from .settings import settings
 AllowedMetricKey = Literal["gross_sales", "orders_sold", "units_sold", "cancellation_rate"]
 AllowedDimension = Literal["ship_state", "category", "fulfilment", "ship_service_level"]
 
-app = FastAPI(
-    title="MetricOps API",
-    version="0.1.0",
-    description="API over certified metrics, data quality, and why-changed explainability.",
-)
+app = FastAPI(title="MetricOps API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 @app.get("/health")
 def health():
     # Also verifies DB connectivity

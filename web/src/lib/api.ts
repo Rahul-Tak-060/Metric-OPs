@@ -1,9 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || "http://127.0.0.1:8000";
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json() as Promise<T>;
+async function apiGet<T>(path: string): Promise<T> {
+  const url = `${API_BASE.replace(/\/$/, "")}${path}`;
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText} - ${text}`);
+  }
+
+  return res.json();
 }
 
 export type Metric = {
@@ -86,20 +93,24 @@ export type DqFailure = {
 export type DqFailuresResponse = { failures: DqFailure[] };
 
 export const api = {
-  metrics: () => getJson<MetricsResponse>("/metrics"),
+  metrics: () => apiGet<MetricsResponse>("/metrics"),
+
   kpiSummary: (d1?: string, d2?: string) => {
     const qs = new URLSearchParams();
     if (d1) qs.set("d1", d1);
     if (d2) qs.set("d2", d2);
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
-    return getJson<KpiSummary>(`/kpi-summary${suffix}`);
+    return apiGet<KpiSummary>(`/kpi-summary${suffix}`);
   },
+
   whyChanged: (metric_key: string, dimension: string, top_n = 10, d1?: string, d2?: string) => {
     const qs = new URLSearchParams({ metric_key, dimension, top_n: String(top_n) });
     if (d1) qs.set("d1", d1);
     if (d2) qs.set("d2", d2);
-    return getJson<WhyChangedResponse>(`/why-changed?${qs.toString()}`);
+    return apiGet<WhyChangedResponse>(`/why-changed?${qs.toString()}`);
   },
-  dqLatest: () => getJson<DqLatest>("/dq/latest"),
-  dqFailures: () => getJson<DqFailuresResponse>("/dq/latest/failures"),
+
+  dqLatest: () => apiGet<DqLatest>("/dq/latest"),
+
+  dqFailures: () => apiGet<DqFailuresResponse>("/dq/latest/failures"),
 };

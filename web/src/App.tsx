@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  getMetrics,
-  getKpiSummary,
-  getWhyChanged,
-  getDqLatest,
-  getDqLatestFailures,
-  type Metric,
-} from "./lib/api";
+import { api, type Metric, type KpiSummary, type WhyChangedResponse, type DqLatest, type DqFailuresResponse } from "./lib/api";
 
 const DIMENSIONS = [
   { key: "ship_state", label: "Ship State" },
@@ -15,19 +8,21 @@ const DIMENSIONS = [
   { key: "ship_service_level", label: "Ship Service Level" },
 ] as const;
 
+type DimensionKey = (typeof DIMENSIONS)[number]["key"];
+
 export default function App() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [metricKey, setMetricKey] = useState("orders_sold");
-  const [dimension, setDimension] = useState<(typeof DIMENSIONS)[number]["key"]>("ship_state");
+  const [dimension, setDimension] = useState<DimensionKey>("ship_state");
 
   const [d1, setD1] = useState<string>("");
   const [d2, setD2] = useState<string>("");
   const [topN, setTopN] = useState<number>(10);
 
-  const [kpi, setKpi] = useState<any>(null);
-  const [why, setWhy] = useState<any>(null);
-  const [dq, setDq] = useState<any>(null);
-  const [dqFailures, setDqFailures] = useState<any>(null);
+  const [kpi, setKpi] = useState<KpiSummary | null>(null);
+  const [why, setWhy] = useState<WhyChangedResponse | null>(null);
+  const [dq, setDq] = useState<DqLatest | null>(null);
+  const [dqFailures, setDqFailures] = useState<DqFailuresResponse | null>(null);
 
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +35,13 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getMetrics();
+        const data = await api.metrics();
         setMetrics(data.metrics);
+
         if (data.metrics.some((m) => m.metric_key === "orders_sold")) setMetricKey("orders_sold");
         else if (data.metrics[0]) setMetricKey(data.metrics[0].metric_key);
       } catch (e: any) {
-        setError(e.message ?? String(e));
+        setError(e?.message ?? String(e));
       }
     })();
   }, []);
@@ -54,10 +50,10 @@ export default function App() {
     setError(null);
     setLoading("kpi");
     try {
-      const res = await getKpiSummary({ d1: d1 || undefined, d2: d2 || undefined });
+      const res = await api.kpiSummary(d1 || undefined, d2 || undefined);
       setKpi(res);
     } catch (e: any) {
-      setError(e.message ?? String(e));
+      setError(e?.message ?? String(e));
     } finally {
       setLoading(null);
     }
@@ -67,16 +63,10 @@ export default function App() {
     setError(null);
     setLoading("why");
     try {
-      const res = await getWhyChanged({
-        metric_key: metricKey,
-        dimension,
-        d1: d1 || undefined,
-        d2: d2 || undefined,
-        top_n: topN,
-      });
+      const res = await api.whyChanged(metricKey, dimension, topN, d1 || undefined, d2 || undefined);
       setWhy(res);
     } catch (e: any) {
-      setError(e.message ?? String(e));
+      setError(e?.message ?? String(e));
     } finally {
       setLoading(null);
     }
@@ -86,11 +76,11 @@ export default function App() {
     setError(null);
     setLoading("dq");
     try {
-      const [a, b] = await Promise.all([getDqLatest(), getDqLatestFailures()]);
+      const [a, b] = await Promise.all([api.dqLatest(), api.dqFailures()]);
       setDq(a);
       setDqFailures(b);
     } catch (e: any) {
-      setError(e.message ?? String(e));
+      setError(e?.message ?? String(e));
     } finally {
       setLoading(null);
     }
@@ -149,16 +139,14 @@ export default function App() {
               ))}
             </select>
             <div className="text-xs text-zinc-400 mt-3">Description</div>
-            <div className="text-sm mt-1 text-zinc-200">
-              {selectedMetric?.description ?? "—"}
-            </div>
+            <div className="text-sm mt-1 text-zinc-200">{selectedMetric?.description ?? "—"}</div>
           </div>
 
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
             <div className="text-xs text-zinc-400">Dimension</div>
             <select
               value={dimension}
-              onChange={(e) => setDimension(e.target.value as any)}
+              onChange={(e) => setDimension(e.target.value as DimensionKey)}
               className="mt-2 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
             >
               {DIMENSIONS.map((d) => (
