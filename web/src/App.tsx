@@ -7,7 +7,10 @@ import {
   type DqLatest,
   type DqFailuresResponse,
 } from "./lib/api";
-import JsonPanel from "./components/JsonPanel";
+
+import KpiSummaryCards from "./components/KpiSummaryCards";
+import { DriversTable } from "./components/DriversTable";
+import JsonPanel from "./components/JsonPanel"; // keep ONLY if you have a Debug JSON toggle
 
 const DIMENSIONS = [
   { key: "ship_state", label: "Ship State" },
