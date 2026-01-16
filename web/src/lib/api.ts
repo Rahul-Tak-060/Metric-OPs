@@ -25,16 +25,28 @@ export type MetricsResponse = { metrics: Metric[] };
 export type KpiSummary = {
   d1: string;
   d2: string;
+
   aov_d1: number;
   aov_d2: number;
   aov_delta: number;
+
   gross_sales_d1: number;
   gross_sales_d2: number;
   gross_sales_delta: number;
+
   orders_sold_d1: number;
   orders_sold_d2: number;
   orders_sold_delta: number;
+
+  units_sold_d1: number;
+  units_sold_d2: number;
+  units_sold_delta: number;
+
+  cancellation_rate_d1: number;
+  cancellation_rate_d2: number;
+  cancellation_rate_delta: number;
 };
+
 
 export type WhyChangedAdditiveDriver = {
   dimension: string;
