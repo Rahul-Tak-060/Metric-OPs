@@ -25,8 +25,11 @@ function fmtUpdatedAt(d: Date | null) {
   return d ? d.toLocaleString() : "Not run yet";
 }
 
+type MetricFilter = "all" | "additive" | "rate";
+
 export default function App() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
+  const [metricFilter, setMetricFilter] = useState<MetricFilter>("all");
   const [metricKey, setMetricKey] = useState("orders_sold");
   const [dimension, setDimension] = useState<DimensionKey>("ship_state");
 
@@ -48,9 +51,18 @@ export default function App() {
 
   const [showDebug, setShowDebug] = useState(false);
 
+  const filteredMetrics = useMemo(() => {
+    if (metricFilter === "all") return metrics;
+    return metrics.filter((m) => {
+      if (metricFilter === "additive") return m.metric_type === "ADDITIVE";
+      if (metricFilter === "rate") return m.metric_type === "RATE";
+      return true;
+    });
+  }, [metrics, metricFilter]);
+
   const selectedMetric = useMemo(
-    () => metrics.find((m) => m.metric_key === metricKey),
-    [metrics, metricKey]
+    () => filteredMetrics.find((m) => m.metric_key === metricKey),
+    [filteredMetrics, metricKey]
   );
 
   useEffect(() => {
@@ -175,13 +187,30 @@ export default function App() {
         {/* Controls */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-            <div className="text-xs text-zinc-400">Metric</div>
+            <div className="text-xs text-zinc-400">Metric Type</div>
+            <div className="flex gap-2 mt-3">
+              {(["all", "additive", "rate"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setMetricFilter(filter)}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition ${
+                    metricFilter === filter
+                      ? "bg-indigo-600 text-white"
+                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  }`}
+                >
+                  {filter === "all" ? "All" : filter === "additive" ? "Additive" : "Rate"}
+                </button>
+              ))}
+            </div>
+
+            <div className="text-xs text-zinc-400 mt-4">Metric</div>
             <select
               value={metricKey}
               onChange={(e) => setMetricKey(e.target.value)}
               className="mt-2 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
             >
-              {metrics.map((m) => (
+              {filteredMetrics.map((m) => (
                 <option key={m.metric_key} value={m.metric_key}>
                   {m.metric_name} ({m.metric_key})
                 </option>
